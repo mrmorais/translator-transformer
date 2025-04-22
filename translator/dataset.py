@@ -1,8 +1,8 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import pandas as pd
 from os.path import join
-from .tokenizer import BertTokenizer
+from translator.tokenizer import BertTokenizer
 
 class TranslationsDataset(Dataset):
     def __init__(self, path, max_tokens=145):
