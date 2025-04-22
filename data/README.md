@@ -1,0 +1,1 @@
+This dataset is collected from "https://tatoeba.org/pt-br/" and it is [licensed](https://tatoeba.org/pt-br/terms_of_use#section-6) under Creative Commons
