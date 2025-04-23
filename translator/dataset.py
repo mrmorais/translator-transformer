@@ -18,13 +18,19 @@ class TranslationsDataset(Dataset):
         print(f"Loaded dataset with size: {len(self.data)}")
 
         self.pt_tokenizer = BertTokenizer(join(path, 'pt-tokens.json'))
+        self.pt_vocab_size = self.pt_tokenizer.tokenizer.get_vocab_size()
+        
         self.en_tokenizer = BertTokenizer(join(path, 'en-tokens.json'))
+        self.en_vocab_size = self.en_tokenizer.tokenizer.get_vocab_size()
 
     def tokenize_pt(self, sentence):
         return self.pt_tokenizer.encode(sentence)
     
     def tokenize_en(self, sentence):
         return self.en_tokenizer.encode(sentence)
+    
+    def decode_en(self, ids):
+        return self.en_tokenizer.decode(ids)
     
     def __len__(self):
         return len(self.data)
