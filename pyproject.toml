@@ -5,7 +5,7 @@ authors = [
     {name = "mrmorais",email = "maradona.morais@hotmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "pandas (>=2.2.3,<3.0.0)",
     "tokenizers (>=0.21.1,<0.22.0)",
