@@ -34,7 +34,7 @@ class TranslatorModel(nn.Module):
             nhead=n_heads,
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
-            dim_feedforward=dim_feedforward
+            dim_feedforward=dim_feedforward,
         )
 
         self.fc_out = nn.Linear(d_model, tgt_vocab_size)
@@ -75,17 +75,17 @@ class TranslatorModel(nn.Module):
         print(dataset.tokenize_pt(src).ids)
         src_tensor = torch.tensor(dataset.tokenize_pt(src).ids).unsqueeze(0).to(device)
         
-        # Init target with 0 = [UNK]
-        tgt = torch.ones(1, 1).fill_(0).type(torch.long).to(device)
+        # Init target with 1 = [CLS]
+        tgt = torch.ones(1, 1).fill_(1).type(torch.long).to(device)
 
         for i in range(max_tokens):
             output = self(src_tensor, tgt)
             pred = output.argmax(2)[:, -1].item()
             tgt = torch.cat([tgt, torch.ones(1, 1).type_as(tgt).fill_(pred)], dim=1)
 
-            if pred == 3: # [PAD]
+            if pred == 2: # [SEP]
                 break
-        print(tgt.squeeze(0).tolist())
+
         return dataset.decode_en(tgt.squeeze(0).tolist())
 
 if __name__ == '__main__':
@@ -96,6 +96,6 @@ if __name__ == '__main__':
     model = TranslatorModel(dataset.pt_vocab_size, dataset.en_vocab_size)
     input, out, o = dataloader._get_iterator()._next_data()
     print(input.shape, out.shape)
-    model(input, out)
+    out = model(input, out)
 
     print(model.translate('Oi, como vai?', dataset, 'cpu'))

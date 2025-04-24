@@ -37,7 +37,7 @@ class TranslationsDataset(Dataset):
     
     def __getitem__(self, index):
         pt_text = self.data['pt'][index]
-        en_text = self.data['pt'][index]
+        en_text = self.data['en'][index]
 
         pt_tokens = self.tokenize_pt(pt_text).ids[:self.max_tokens]
         en_tokens = self.tokenize_en(en_text).ids[:self.max_tokens]
