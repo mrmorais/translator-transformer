@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import wandb
+import tempfile
+import os
 from tqdm import tqdm
 from torch.optim import Adam
 from translator.dataset import TranslationsDataset
@@ -8,22 +10,20 @@ from translator.model import TranslatorModel
 from translator.utils import collate_fn
 from torch.utils.data import DataLoader
 
-DEVICE = 'cuda' if torch.cuda.is_available() else 'mps'
-print(f'Using device: {DEVICE}')
-
 wandb.login()
 
-def train(model, dataloader, optimizer, criterion):
+def train_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss = 0
 
     batches = tqdm(dataloader, desc='Training', leave=False)
 
     for src, tgt_in, tgt_out in batches:
-        src = src.to(DEVICE)
-        tgt_in = tgt_in.to(DEVICE)
+        if device:
+            src = src.to(device)
+            tgt_in = tgt_in.to(device)
+            tgt_out = tgt_out.to(device)
 
-        tgt_out = tgt_out.to(DEVICE)
         tgt_out = tgt_out.view(-1)
 
         optimizer.zero_grad()
@@ -41,7 +41,13 @@ def train(model, dataloader, optimizer, criterion):
 
     return total_loss / len(dataloader)
 
-def main():
+def train(use_ray=False):
+    if use_ray:
+        import ray.train.torch
+
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'mps'
+    print(f'Using device: {DEVICE}')
+
     defaults=dict(
         dropout=0.1,
         n_epochs=10,
@@ -55,7 +61,8 @@ def main():
     config = wandb.config
     print(f"Config: {config}")
 
-    dataset = TranslationsDataset('data')
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset = TranslationsDataset(os.path.join(local_dir, 'data'))
     dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, collate_fn=collate_fn)
 
     model = TranslatorModel(
@@ -64,7 +71,12 @@ def main():
         dropout=config.dropout,
         n_layers=config.n_layers,
         n_heads=config.n_heads,
-    ).to(DEVICE)
+    )
+
+    if use_ray:
+        ray.train.torch.prepare_model(model)
+    else:
+        model.to(DEVICE)
 
     wandb.watch(model, log='all', log_graph=True)
 
@@ -74,21 +86,33 @@ def main():
     epochs = tqdm(range(config.n_epochs), desc='Epochs')
 
     for epoch in epochs:
-        avg_loss = train(model, dataloader, optimizer, criterion)
+        avg_loss = train_epoch(model, dataloader, optimizer, criterion, device=DEVICE if not use_ray else None)
         print(f"Epoch {epoch}. Loss: {avg_loss:.4f}")
 
         test = model.translate('Oi, como vai?', dataset, DEVICE)
         print(f"Test translation: {test}")
 
-        wandb.log({
+        metrics = {
             'epoch': epoch,
             'loss': avg_loss,
-        })
+        }
 
-        if epoch % 2 == 0:
-            checkpoint = f'model_epoch_{epoch}.pt'
-            torch.save(model.state_dict(), checkpoint)
-            wandb.save(checkpoint)
+        wandb.log(metrics)
+
+        if use_ray and ray.train.get_context().get_world_rank() == 0:
+            print(metrics)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = f'{tmpdir}/model_epoch_{epoch}.pt'
+
+            torch.save(model.state_dict(), checkpoint_path)
+            wandb.save(checkpoint_path)
+
+            if use_ray:
+                ray.train.report(
+                    metrics,
+                    checkpoint=ray.train.Checkpoint.from_directory(tmpdir),
+                )
 
 if __name__ == '__main__':
-    main()
+    train()
