@@ -22,7 +22,7 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, :x.size(1)]
 
 class TranslatorModel(nn.Module):
-    def __init__(self, src_vocab_size, tgt_vocab_size, d_model=512, n_heads=8, num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=2048):
+    def __init__(self, src_vocab_size, tgt_vocab_size, d_model=512, n_heads=8, n_layers=6, dim_feedforward=2048, dropout=0.1):
         super().__init__()
 
         self.embedding_src = nn.Embedding(src_vocab_size, d_model)
@@ -32,9 +32,10 @@ class TranslatorModel(nn.Module):
         self.transformer = nn.Transformer(
             d_model=d_model,
             nhead=n_heads,
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
+            num_encoder_layers=n_layers,
+            num_decoder_layers=n_layers,
             dim_feedforward=dim_feedforward,
+            dropout=dropout,
         )
 
         self.fc_out = nn.Linear(d_model, tgt_vocab_size)
