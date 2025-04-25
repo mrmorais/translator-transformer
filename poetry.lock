@@ -1050,7 +1050,11 @@ files = [
 ]
 
 [package.dependencies]
-numpy = {version = ">=1.26.0", markers = "python_version >= \"3.12\""}
+numpy = [
+    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
+    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
 tzdata = ">=2022.7"
@@ -2189,5 +2193,5 @@ workspaces = ["wandb-workspaces"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.12"
-content-hash = "bef6f86c5a9744039ce46935cb5ed1fdeb0398b662a6bd97965151f63cc39fa3"
+python-versions = ">=3.10"
+content-hash = "765632b4477910dde7f48eb40f0965c2c55f797d07c7525ce079071172f48a31"
