@@ -6,15 +6,60 @@ import os
 from tqdm import tqdm
 from torch.optim import Adam
 from translator.dataset import TranslationsDataset
+from translator.ray_dataset import get_ray_dataset, get_tokenizers
 from translator.model import TranslatorModel
-from translator.utils import collate_fn
+from translator.utils import collate_fn, collate_ray_fn
 from torch.utils.data import DataLoader
+import ray.train.torch
 
 wandb.login()
+
+def initialize(config, device, use_ray=False):
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_dir = os.path.join(local_dir, 'data')
+
+    pt_tokenizer, en_tokenizer = get_tokenizers(dataset_dir)
+
+    model = TranslatorModel(
+        src_vocab_size=pt_tokenizer.tokenizer.get_vocab_size(),
+        tgt_vocab_size=en_tokenizer.tokenizer.get_vocab_size(),
+        dropout=config.dropout,
+        n_layers=config.n_layers,
+        n_heads=config.n_heads,
+    )
+
+    if use_ray:
+        # Prepare model
+        ray.train.torch.prepare_model(model)
+
+        # Prepare dataloader
+        dataset = get_ray_dataset(dataset_dir)
+        dataloader = dataset.iter_torch_batches(
+            batch_size=config.batch_size,
+            collate_fn=collate_ray_fn,
+        )
+
+        # Prepare metrics reporter
+        def ray_reporter(dir, metrics):
+            ray.train.report(
+                metrics,
+                checkpoint=ray.train.Checkpoint.from_directory(dir),
+            )
+
+        return model, dataloader, ray_reporter, pt_tokenizer, en_tokenizer
+    else:
+        model.to(device)
+
+        dataset = TranslationsDataset(dataset_dir)
+        dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, collate_fn=collate_fn)
+
+        return model, dataloader, None, pt_tokenizer, en_tokenizer
+
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss = 0
+    total_count = 0
 
     batches = tqdm(dataloader, desc='Training', leave=False)
 
@@ -37,15 +82,13 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         optimizer.step()
 
         total_loss += loss.item()
+        total_count += 1
         batches.set_postfix({ 'loss': f'{loss.item():.4f}'})
 
-    return total_loss / len(dataloader)
+    return total_loss / total_count
 
 def train(use_ray=False):
-    if use_ray:
-        import ray.train.torch
-
-    DEVICE = 'cuda' if torch.cuda.is_available() else 'mps'
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {DEVICE}')
 
     defaults=dict(
@@ -59,24 +102,14 @@ def train(use_ray=False):
 
     wandb.init(project='translator-attn', config=defaults)
     config = wandb.config
+
     print(f"Config: {config}")
 
-    local_dir = os.path.dirname(os.path.abspath(__file__))
-    dataset = TranslationsDataset(os.path.join(local_dir, 'data'))
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True, collate_fn=collate_fn)
-
-    model = TranslatorModel(
-        src_vocab_size=dataset.pt_vocab_size,
-        tgt_vocab_size=dataset.en_vocab_size,
-        dropout=config.dropout,
-        n_layers=config.n_layers,
-        n_heads=config.n_heads,
+    model, dataloader, ray_reporter, pt_tokenizer, en_tokenizer = initialize(
+        config,
+        DEVICE,
+        use_ray=use_ray,
     )
-
-    if use_ray:
-        ray.train.torch.prepare_model(model)
-    else:
-        model.to(DEVICE)
 
     wandb.watch(model, log='all', log_graph=True)
 
@@ -89,12 +122,13 @@ def train(use_ray=False):
         avg_loss = train_epoch(model, dataloader, optimizer, criterion, device=DEVICE if not use_ray else None)
         print(f"Epoch {epoch}. Loss: {avg_loss:.4f}")
 
-        test = model.translate('Oi, como vai?', dataset, DEVICE)
+        test = model.translate('Oi, como vai?', pt_tokenizer, en_tokenizer, DEVICE)
         print(f"Test translation: {test}")
 
         metrics = {
             'epoch': epoch,
             'loss': avg_loss,
+            'test_prediction': test
         }
 
         wandb.log(metrics)
@@ -104,15 +138,21 @@ def train(use_ray=False):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint_path = f'{tmpdir}/model_epoch_{epoch}.pt'
-
             torch.save(model.state_dict(), checkpoint_path)
-            wandb.save(checkpoint_path)
+            alias = [f"epoch-{epoch}", f"loss-{avg_loss:.4f}"]
 
-            if use_ray:
-                ray.train.report(
-                    metrics,
-                    checkpoint=ray.train.Checkpoint.from_directory(tmpdir),
-                )
+            model_artifact = wandb.Artifact(
+                name="attn-translator",
+                type="model",
+                metadata=metrics
+            )
+
+            model_artifact.add_file(checkpoint_path, name='model.pt')
+
+            wandb.log_artifact(model_artifact, aliases=alias)
+
+            if ray_reporter is not None:
+                ray_reporter(tmpdir, metrics)
 
 if __name__ == '__main__':
     train()

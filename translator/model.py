@@ -2,9 +2,9 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import math
-from .utils import generate_mask, collate_fn
-
-from .dataset import TranslationsDataset
+from translator.utils import generate_mask, collate_fn
+from translator.dataset import TranslationsDataset
+from translator.tokenizer import BertTokenizer
 from torch.utils.data import DataLoader
 
 class PositionalEncoding(nn.Module):
@@ -70,12 +70,10 @@ class TranslatorModel(nn.Module):
 
         return output
     
-    def translate(self, src: str, dataset: TranslationsDataset, device, max_tokens=50) -> str:
+    def translate(self, src: str, pt_tokenizer: BertTokenizer, en_tokenizer: BertTokenizer, device, max_tokens=50) -> str:
         self.eval()
 
-        print(dataset.tokenize_pt(src).ids)
-        src_tensor = torch.tensor(dataset.tokenize_pt(src).ids).unsqueeze(0).to(device)
-        
+        src_tensor = torch.tensor(pt_tokenizer.encode(src).ids).unsqueeze(0).to(device)
         # Init target with 1 = [CLS]
         tgt = torch.ones(1, 1).fill_(1).type(torch.long).to(device)
 
@@ -87,7 +85,7 @@ class TranslatorModel(nn.Module):
             if pred == 2: # [SEP]
                 break
 
-        return dataset.decode_en(tgt.squeeze(0).tolist())
+        return en_tokenizer.decode(tgt.squeeze(0).tolist())
 
 if __name__ == '__main__':
 
