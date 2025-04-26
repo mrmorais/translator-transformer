@@ -6,13 +6,13 @@ client = JobSubmissionClient("http://127.0.0.1:8265")
 entrypoint = (
     "rm -rf translator-transformer; "
     "git clone https://github.com/mrmorais/translator-transformer || true; "
-    "python train_distr.py"
+    "cd translator-transformer && python train_distr.py"
 )
 
 submission_id = client.submit_job(
     entrypoint=entrypoint,
     runtime_env={
-        "pip": ["torch", "ray[train]", "tokenizers", "wandb", "tqdm", "pandas"],
+        "pip": ["torch", "ray[train,data]", "tokenizers", "wandb", "tqdm", "pandas"],
         "env_vars": {
             "WANDB_API_KEY": os.environ["WANDB_API_KEY"],
         }
