@@ -49,11 +49,11 @@ Surprisingly, it captures the grammatical structure quite well. Some instances:
 
 ### Alignment
 
-Languages may have different rules on how words are ordered, nouns and adjectives are example. Neural translation may suffer to learn those rules when having to keep a historic context (on old RNN models), although attention models are better at learning them:
+Languages may have different rules on how words are ordered, nouns and adjectives are example. Neural translation needs spatial context in order to learn those rules (like RNN model), attention models are better at learning them given the long-range retrieval and multi head approach:
 
 > o pequeno gato cinza -> the little gray cat.
 
-In some cases the model deviates from the original meaning:
+In some cases it deviates from the original meaning:
 
 > a grande casa amarela -> the big house is yellow. ❌
 
