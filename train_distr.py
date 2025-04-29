@@ -9,7 +9,9 @@ from functools import partial
 runtime_env = {
     "working_dir": "/home/ray/translator-transformer",
     "excludes": ["*.pyc", "__pycache__"],
-    "py_modules": ["train_model"]
+    "env_vars": {
+        "PYTHONPATH": "/home/ray/translator-transformer:$PYTHONPATH"
+    }
 }
 
 ray.init(address="auto", runtime_env=runtime_env)
