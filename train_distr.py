@@ -15,7 +15,7 @@ runtime_env = {
 }
 
 ray.init(address="auto", runtime_env=runtime_env)
-scaling_config = ScalingConfig(num_workers=3, use_gpu=False, worker_class_path="/home/ray/translator-transformer")
+scaling_config = ScalingConfig(num_workers=3, use_gpu=False)
 
 trainer = TorchTrainer(partial(train, use_ray=True), scaling_config=scaling_config)
 trainer.fit()
